@@ -19,7 +19,7 @@ const db = new sqlite3.Database(':memory:', (err) => {
 });
 
 // Create a table to store data
-db.run('CREATE TABLE uploads (make TEXT, model TEXT, badge TEXT, logbook TEXT)', (err) => {
+db.run('CREATE TABLE uploads (id INTEGER PRIMARY KEY AUTOINCREMENT, make TEXT, model TEXT, badge TEXT, logbook TEXT)', (err) => {
     if (err) {
         console.error("Could not create table", err.message);
     }
@@ -32,25 +32,26 @@ app.post('/upload', (req, res) => {
     // Insert the submitted data into the SQLite database
     db.run(`INSERT INTO uploads (make, model, badge, logbook) VALUES (?, ?, ?, ?)`, [make, model, badge, logbook], function(err) {
         if (err) {
-            return console.error(err.message);
+            return res.status(500).json({ error: err.message });
         }
-        res.json({
-            id: this.lastID, // ID of the last inserted row
-            make,
-            model,
-            badge,
-            logbook
+        
+        // Fetch all the data from the database to send as response
+        db.all('SELECT * FROM uploads', [], (err, rows) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            res.json(rows);
         });
     });
 });
 
 app.get('/upload', (req, res) => {
-    // Fetch the last submitted data from the SQLite database
-    db.get('SELECT * FROM uploads ORDER BY rowid DESC LIMIT 1', [], (err, row) => {
+    // Fetch all the submitted data from the SQLite database
+    db.all('SELECT * FROM uploads', [], (err, rows) => {
         if (err) {
-            return console.error(err.message);
+            return res.status(500).json({ error: err.message });
         }
-        res.json(row);
+        res.json(rows);
     });
 });
 
