@@ -1,6 +1,8 @@
 const express = require('express');
 const fileUpload = require('express-fileupload');
 const cors = require('cors');
+const sqlite3 = require('sqlite3').verbose();  // Import SQLite
+
 const app = express();
 
 app.use(cors());
@@ -8,27 +10,48 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(fileUpload());
 
-// Temp storage for the last submitted data
-let lastSubmittedData = {};
+// Set up SQLite database
+const db = new sqlite3.Database(':memory:', (err) => {
+    if (err) {
+        return console.error(err.message);
+    }
+    console.log('Connected to the in-memory SQLite database.');
+});
+
+// Create a table to store data
+db.run('CREATE TABLE uploads (make TEXT, model TEXT, badge TEXT, logbook TEXT)', (err) => {
+    if (err) {
+        console.error("Could not create table", err.message);
+    }
+});
 
 app.post('/upload', (req, res) => {
     const { make, model, badge } = req.body;
     const logbook = req.files ? req.files.logbook.data.toString('utf8') : '';
 
-    // Store the submitted data
-    lastSubmittedData = {
-        make,
-        model,
-        badge,
-        logbook
-    };
-    
-    res.json(lastSubmittedData);
+    // Insert the submitted data into the SQLite database
+    db.run(`INSERT INTO uploads (make, model, badge, logbook) VALUES (?, ?, ?, ?)`, [make, model, badge, logbook], function(err) {
+        if (err) {
+            return console.error(err.message);
+        }
+        res.json({
+            id: this.lastID, // ID of the last inserted row
+            make,
+            model,
+            badge,
+            logbook
+        });
+    });
 });
 
 app.get('/upload', (req, res) => {
-    // Convert the last submitted data to text and send it
-    res.send(JSON.stringify(lastSubmittedData, null, 2));
+    // Fetch the last submitted data from the SQLite database
+    db.get('SELECT * FROM uploads ORDER BY rowid DESC LIMIT 1', [], (err, row) => {
+        if (err) {
+            return console.error(err.message);
+        }
+        res.json(row);
+    });
 });
 
 app.get('/', (req, res) => {
